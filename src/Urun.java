@@ -1,5 +1,5 @@
 public class Urun {
-    private final String urunKodu;
+    private final long urunKodu;
     private final String urunAdi;
     private final String kategori;
     private final String renk;
@@ -7,7 +7,7 @@ public class Urun {
     private double fiyat;
     private int stokMiktari;
 
-    public Urun(String urunKodu, String urunAdi, String kategori, String renk, String beden, double fiyat, int stokMiktari) {
+    public Urun(long urunKodu, String urunAdi, String kategori, String renk, String beden, double fiyat, int stokMiktari) {
         this.urunKodu = urunKodu;
         this.urunAdi = urunAdi;
         this.kategori = kategori;
@@ -18,7 +18,7 @@ public class Urun {
     }
 
     // Getter ve Setter metodları
-    public String getUrunKodu() { return urunKodu; }
+    public long getUrunKodu() { return urunKodu; }
     public String getUrunAdi() { return urunAdi; }
     public String getKategori() { return kategori; }
     public String getRenk() { return renk; }

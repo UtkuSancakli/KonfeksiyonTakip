@@ -1,3 +1,4 @@
+import javax.swing.*;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -5,9 +6,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class KonfeksiyonTakipSistemi {
-    Map<String, Urun> urunler;
-    private Map<String, Musteri> musteriler;
-    private Map<String, Siparis> siparisler;
+
+    private KonfeksiyonGUI myGui;
+    Map<Long, Urun> urunler;
+    protected Map<Integer, Musteri> musteriler;
+    protected Map<Integer, Siparis> siparisler;
+
     private int siparisCounter = 1;
     private int musteriCounter = 1;
 
@@ -18,13 +22,13 @@ public class KonfeksiyonTakipSistemi {
     }
 
     // Ürün yönetimi
-    public void urunEkle(String urunKodu, String urunAdi, String kategori, String renk, String beden, double fiyat, int stokMiktari) {
+    public void urunEkle(long urunKodu, String urunAdi, String kategori, String renk, String beden, double fiyat, int stokMiktari) {
         Urun urun = new Urun(urunKodu, urunAdi, kategori, renk, beden, fiyat, stokMiktari);
         urunler.put(urunKodu, urun);
         System.out.println("✓ Ürün eklendi: " + urun);
     }
 
-    public void stokGuncelle(String urunKodu, int yeniStok) {
+    public void stokGuncelle(long urunKodu, int yeniStok) {
         Urun urun = urunler.get(urunKodu);
         if (urun != null) {
             int eskiStok = urun.getStokMiktari();
@@ -42,56 +46,33 @@ public class KonfeksiyonTakipSistemi {
     }
 
     // Müşteri yönetimi
-    public String musteriEkle(String ad, String soyad, String telefon, String email, String adres) {
-        String musteriId = "M" + String.format("%04d", musteriCounter++);
+    public void musteriEkle(String ad, String soyad, String telefon, String email, String adres) {
+        int musteriId = musteriCounter++;
         Musteri musteri = new Musteri(musteriId, ad, soyad, telefon, email, adres);
         musteriler.put(musteriId, musteri);
         System.out.println("✓ Müşteri eklendi: " + musteri);
-        return musteriId;
     }
 
-    // Sipariş yönetimi
-    public String siparisOlustur(String musteriId) {
-        if (!musteriler.containsKey(musteriId)) {
-            System.out.println("✗ Müşteri bulunamadı: " + musteriId);
-            return null;
-        }
-
-        String siparisNo = "S" + String.format("%06d", siparisCounter++);
-        Siparis siparis = new Siparis(siparisNo, musteriId);
-        siparisler.put(siparisNo, siparis);
-        System.out.println("✓ Yeni sipariş oluşturuldu: " + siparisNo);
-        return siparisNo;
+    public void musteriSil(int id){
+        musteriler.remove(id);
+        musteriCounter--;
     }
 
-    public void siparisUrunEkle(String siparisNo, String urunKodu, int miktar) {
-        Siparis siparis = siparisler.get(siparisNo);
-        Urun urun = urunler.get(urunKodu);
+    public void siparisOlustur(int siparisNo, long urunNo, String musteriAdi, int toplamAdet, LocalDate siparisTarihi, LocalDate teslimTarihi,  List<SiparisDetay> detaylar, String notlar) {
 
-        if (siparis == null) {
-            System.out.println("✗ Sipariş bulunamadı: " + siparisNo);
-            return;
-        }
+        //checkStock(urunNo, toplamAdet);
 
-        if (urun == null) {
-            System.out.println("✗ Ürün bulunamadı: " + urunKodu);
-            return;
-        }
+        Siparis tempSiparis = new Siparis(siparisNo, urunNo, musteriAdi, toplamAdet, siparisTarihi, teslimTarihi, detaylar, notlar);
+        siparisler.put(siparisNo, tempSiparis);
 
-        if (urun.getStokMiktari() < miktar) {
-            System.out.println("✗ Yetersiz stok! Mevcut: " + urun.getStokMiktari() + ", İstenen: " + miktar);
-            return;
-        }
 
-        siparis.urunEkle(urunKodu, miktar, urun.getFiyat());
-        urun.setStokMiktari(urun.getStokMiktari() - miktar);
-        System.out.println("✓ Ürün siparişe eklendi: " + urunKodu + " x" + miktar);
+        logEkle("✓ Yeni sipariş eklendi: " + siparisNo);
     }
 
-    public void siparisDurumGuncelle(String siparisNo, SiparisDurumu yeniDurum) {
+    public void siparisDurumGuncelle(String siparisNo, boolean yeniDurum) {
         Siparis siparis = siparisler.get(siparisNo);
         if (siparis != null) {
-            SiparisDurumu eskiDurum = siparis.getDurum();
+            boolean eskiDurum = siparis.getDurum();
             siparis.setDurum(yeniDurum);
             System.out.println("✓ Sipariş durumu güncellendi: " + siparisNo + " (" + eskiDurum + " → " + yeniDurum + ")");
         } else {
@@ -118,7 +99,7 @@ public class KonfeksiyonTakipSistemi {
             System.out.println("=".repeat(50));
             System.out.println(siparis);
 
-            Musteri musteri = musteriler.get(siparis.getMusteriId());
+            Musteri musteri = musteriler.get(siparis.getMusteriAdi());
             if (musteri != null) {
                 System.out.println("Müşteri Bilgileri: " + musteri);
             }
@@ -131,8 +112,8 @@ public class KonfeksiyonTakipSistemi {
     public void gunlukSiparisRaporu() {
         LocalDate bugun = LocalDate.now();
         List<Siparis> gunlukSiparisler = siparisler.values().stream()
-                .filter(s -> s.getSiparisTarihi().toLocalDate().equals(bugun))
-                .collect(Collectors.toList());
+                .filter(s -> s.getSiparisTarihi().equals(bugun))
+                .toList();
 
         System.out.println("\n" + "=".repeat(50));
         System.out.println("GÜNLÜK SİPARİŞ RAPORU - " + bugun);
@@ -140,15 +121,15 @@ public class KonfeksiyonTakipSistemi {
         System.out.println("Toplam Sipariş: " + gunlukSiparisler.size());
 
         double toplamCiro = gunlukSiparisler.stream()
-                .mapToDouble(Siparis::getToplamTutar)
+                .mapToDouble(Siparis::getToplamFiyat)
                 .sum();
         System.out.println("Günlük Ciro: " + String.format("%.2f TL", toplamCiro));
 
-        Map<SiparisDurumu, Long> durumSayilari = gunlukSiparisler.stream()
+        Map<Boolean, Long> durumSayilari = gunlukSiparisler.stream()
                 .collect(Collectors.groupingBy(Siparis::getDurum, Collectors.counting()));
 
         System.out.println("\nDurum Dağılımı:");
-        for (Map.Entry<SiparisDurumu, Long> entry : durumSayilari.entrySet()) {
+        for (Map.Entry<Boolean, Long> entry : durumSayilari.entrySet()) {
             System.out.println("  " + entry.getKey() + ": " + entry.getValue());
         }
         System.out.println("=".repeat(50));
@@ -189,16 +170,109 @@ public class KonfeksiyonTakipSistemi {
 
         if (siparisler.isEmpty()) {
             System.out.println("Henüz sipariş bulunmuyor.");
-        } else {
+        }
+        else {
             for (Siparis siparis : siparisler.values()) {
                 System.out.println(String.format("Sipariş: %s | Müşteri: %s | Durum: %s | Tutar: %.2f TL | Tarih: %s",
                         siparis.getSiparisNo(),
-                        siparis.getMusteriId(),
+                        siparis.getMusteriAdi(),
                         siparis.getDurum(),
-                        siparis.getToplamTutar(),
-                        siparis.getSiparisTarihi().toLocalDate()));
+                        siparis.getToplamFiyat(),
+                        siparis.getSiparisTarihi()));
             }
         }
         System.out.println("=".repeat(50));
     }
+
+
+    //Helper methods ---------------------------------------------------------------------------
+    private double checkPrice(long urunNo, double birimFiyat) {
+
+        double mainBirimFiyat = urunler.get(urunNo).getFiyat();
+        if(mainBirimFiyat != birimFiyat){
+            int answer = JOptionPane.showConfirmDialog(null,
+                    "Ürünün kayıtlı birim fiyatı ile girilen fiyat aynı değil. Yeni fiyat yine de kullanılsın mı? Kayıtlı Birim Fiyatı: " + mainBirimFiyat + "| Girilen: " + birimFiyat,
+                    "Fiyat Uyarısı", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
+            if (answer != JOptionPane.YES_OPTION) {
+                return mainBirimFiyat;
+            }
+        }
+        return birimFiyat;
+    }
+
+    private void checkStock(long urunNo, int adet) {
+        int stokMiktari = urunler.get(urunNo).getStokMiktari();
+        if(stokMiktari < adet){
+            JOptionPane.showMessageDialog(null, "Stok miktarı sipariş miktarını karşılamıyor. Üretilmesi gerek ürün sayısı: " + (adet-stokMiktari), "Stok Miktarı Uyarısı", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    private static void logEkle(String mesaj) {
+        String zaman = java.time.LocalTime.now().toString().substring(0, 8);
+        KonfeksiyonGUI.logArea.append("[" + zaman + "] " + mesaj + "\n");
+        KonfeksiyonGUI.logArea.setCaretPosition(KonfeksiyonGUI.logArea.getDocument().getLength());
+    }
+
+    private void refreshUrunlerTable() {
+        // Clear existing data
+        myGui.urunTableModel.setRowCount(0);
+
+        // Add all products from the Map
+        for (Urun urun : urunler.values()) {
+            Object[] row = {
+                    urun.getUrunKodu(),
+                    urun.getUrunAdi(),
+                    urun.getKategori(),
+                    urun.getRenk(),
+                    urun.getBeden(),
+                    String.format("%.2f TL", urun.getFiyat()),
+                    urun.getStokMiktari()
+            };
+            myGui.urunTableModel.addRow(row);
+        }
+
+        logEkle("📦 Ürün tablosu yenilendi - " + urunler.size() + " ürün");
+    }
+
+    private void refreshMusterilerTable() {
+        // Assuming you have a musteriTableModel variable for the customer table
+        // Clear existing data
+        myGui.musteriTableModel.setRowCount(0);
+
+        // Add all customers from the Map
+        for (Musteri musteri : musteriler.values()) {
+            Object[] row = {
+                    musteri.getId(),
+                    musteri.getAd() + " " + musteri.getSoyad(),
+                    musteri.getTelefon(),
+                    musteri.getEmail()
+            };
+            myGui.musteriTableModel.addRow(row);
+        }
+
+        logEkle("👥 Müşteri tablosu yenilendi - " + musteriler.size() + " müşteri");
+    }
+
+    private void refreshSiparislerTable() {
+        // Assuming you have a siparisTableModel variable for the orders table
+        // Clear existing data
+        myGui.siparisTableModel.setRowCount(0);
+
+        // Add all orders from the Map
+        for (Siparis siparis : siparisler.values()) {
+            Object[] row = {
+                    siparis.getSiparisNo(),
+                    siparis.getMusteriAdi(),
+                    siparis.getUrunNo(),
+                    siparis.getDurum() ? "Hazır" : "Beklemede",
+                    siparis.getDetaylar().stream().mapToInt(SiparisDetay::getMiktar).sum(), // Total quantity
+                    String.format("%.2f TL", siparis.getToplamFiyat())
+            };
+            myGui.siparisTableModel.addRow(row);
+        }
+
+        logEkle("📋 Sipariş tablosu yenilendi - " + siparisler.size() + " sipariş");
+    }
+
+
 }

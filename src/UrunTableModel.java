@@ -44,5 +44,37 @@ class UrunTableModel extends AbstractTableModel {
         this.urunler = yeniUrunler;
         fireTableDataChanged();
     }
+
+    public void setRowCount(int i) {
+        if (i == 0) {
+            urunler.clear();
+            fireTableDataChanged();
+        } else if (i < urunler.size()) {
+            urunler = new ArrayList<>(urunler.subList(0, i));
+            fireTableDataChanged();
+        }
+        // Eğer i > urunler.size() ise, genelde tabloya boş satır eklemek istenmez. Gerekirse orası da yapılabilir.
+    }
+
+    public void addRow(Object[] row) {
+        if (row.length < 7) return;
+
+        try {
+            Urun yeniUrun = new Urun(
+                    Integer.parseInt(row[0].toString()),    // Ürün Kodu
+                    row[1].toString(),                      // Ürün Adı
+                    row[2].toString(),                      // Kategori
+                    row[3].toString(),                      // Renk
+                    row[4].toString(),                      // Beden
+                    Double.parseDouble(row[5].toString().replace(" TL", "").replace(",", ".")),  // Fiyat
+                    Integer.parseInt(row[6].toString())     // Stok
+            );
+            urunler.add(yeniUrun);
+            fireTableRowsInserted(urunler.size() - 1, urunler.size() - 1);
+        } catch (Exception e) {
+            System.err.println("Satır eklenemedi: " + e.getMessage());
+        }
+    }
+
 }
 
