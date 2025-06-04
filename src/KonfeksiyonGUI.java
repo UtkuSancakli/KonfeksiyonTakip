@@ -20,6 +20,8 @@ public class KonfeksiyonGUI extends JFrame {
     private JTable musteriTable;
     SiparisTableModel siparisTableModel;
     private JTable siparisTable;
+    SiparisDetayTableModel detayTableModel;
+    private JTable detayTable;
 
     static JTextArea logArea;
 
@@ -119,7 +121,7 @@ public class KonfeksiyonGUI extends JFrame {
         urunTable.getTableHeader().setReorderingAllowed(false);
 
         // Stok sütunu için özel renderer (düşük stok kırmızı)
-        urunTable.getColumnModel().getColumn(6).setCellRenderer(new DefaultTableCellRenderer() {
+        urunTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
@@ -184,36 +186,56 @@ public class KonfeksiyonGUI extends JFrame {
     }
 
     private JPanel createSiparisPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
+        JPanel anaPanel = new JPanel(new BorderLayout());
 
-        // Buton paneli
+
+        // === Üst: Buton Paneli ===
         JPanel buttonPanel = new JPanel(new FlowLayout());
         JButton ekleBtn = new JButton("➕ Sipariş Ekle");
         JButton yenileBtn = new JButton("↻ Yenile");
-
         buttonPanel.add(ekleBtn);
         buttonPanel.add(yenileBtn);
-        panel.add(buttonPanel, BorderLayout.NORTH);
+        anaPanel.add(buttonPanel, BorderLayout.NORTH);
 
-        // Sipariş tablosu
+        // === Orta: JSplitPane ile 2 tablo ===
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        splitPane.setResizeWeight(0.5);
+
+        // --- Üst: Sipariş Tablosu ---
         List<Siparis> siparisler = new ArrayList<>(sistem.siparisler.values());
         siparisTableModel = new SiparisTableModel(siparisler);
         siparisTable = new JTable(siparisTableModel);
         siparisTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        siparisTable.getTableHeader().setReorderingAllowed(false);
+        JScrollPane siparisScroll = new JScrollPane(siparisTable);
+        siparisScroll.setBorder(BorderFactory.createTitledBorder("Siparişler"));
 
-        JScrollPane scrollPane = new JScrollPane(siparisTable);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        // --- Alt: Sipariş Detay Tablosu ---
+        detayTableModel = new SiparisDetayTableModel(new ArrayList<>());
+        detayTable = new JTable(detayTableModel);
+        JScrollPane detayScroll = new JScrollPane(detayTable);
+        detayScroll.setBorder(BorderFactory.createTitledBorder("Sipariş Detayları"));
 
-        // Sipariş ekle butonu
+        // === Satır seçimi ===
+        siparisTable.getSelectionModel().addListSelectionListener(e -> {
+            int selectedRow = siparisTable.getSelectedRow();
+            if (selectedRow >= 0) {
+                Siparis secili = siparisTableModel.getSiparisAt(selectedRow);
+                if (secili != null) {
+                    detayTableModel.setDetaylar(secili.getDetaylar());
+                }
+            }
+        });
+
+        splitPane.setTopComponent(siparisScroll);
+        splitPane.setBottomComponent(detayScroll);
+        anaPanel.add(splitPane, BorderLayout.CENTER);
+
+        // === Buton aksiyonları ===
         ekleBtn.addActionListener(e -> siparisEkleDialog());
-
-        // Yenile butonu
         yenileBtn.addActionListener(e -> siparisTablosunuYenile());
 
-        return panel;
+        return anaPanel;
     }
-
 
     private JPanel createRaporPanel() {
         JPanel panel = new JPanel(new GridLayout(2, 2, 10, 10));
@@ -417,8 +439,8 @@ public class KonfeksiyonGUI extends JFrame {
         sistem.urunEkle(230274704, "Denim Ceket", "Ceket", "Mavi", "L", 750.0, 15);
 
         // Örnek siparişler
-        SiparisDetay detay1 = new SiparisDetay("M", 10, 69.99);
-        SiparisDetay detay2 = new SiparisDetay("XS", 10, 59.99);
+        SiparisDetay detay1 = new SiparisDetay("M", 10, "Mavi", 69.99);
+        SiparisDetay detay2 = new SiparisDetay("XS", 10, "Siyah",59.99);
 
         List<SiparisDetay> detaylar = new ArrayList<SiparisDetay>();
         detaylar.add(detay1);
@@ -434,6 +456,9 @@ public class KonfeksiyonGUI extends JFrame {
 
 
         urunTablosunuYenile();
+        siparisTablosunuYenile();
+        musteriTablosunuYenile();
+
         logEkle("🏭 Sistem başlatıldı - Örnek veriler yüklendi");
     }
 
@@ -625,14 +650,18 @@ public class KonfeksiyonGUI extends JFrame {
                     JTextField bedenField = new JTextField(5);
                     JTextField miktarField = new JTextField(5);
                     JTextField fiyatField = new JTextField(5);
+                    JTextField renkField = new JTextField(5);
 
                     JPanel detayPanel = new JPanel(new GridLayout(0, 2));
                     detayPanel.add(new JLabel("Beden:"));
                     detayPanel.add(bedenField);
                     detayPanel.add(new JLabel("Miktar:"));
                     detayPanel.add(miktarField);
+                    detayPanel.add(new JLabel("Renk:"));
+                    detayPanel.add(renkField);
                     detayPanel.add(new JLabel("Birim Fiyat:"));
                     detayPanel.add(fiyatField);
+
 
                     Object[] options = {"Devam", "Bitir"};
                     int detayResult = JOptionPane.showOptionDialog(null, detayPanel, "Sipariş Detay Ekle",
@@ -644,8 +673,9 @@ public class KonfeksiyonGUI extends JFrame {
                             String beden = bedenField.getText().trim();
                             int miktar = Integer.parseInt(miktarField.getText().trim());
                             double birimFiyat = Double.parseDouble(fiyatField.getText().trim());
+                            String renk = renkField.getText().trim();
 
-                            SiparisDetay detay = new SiparisDetay(beden, miktar, birimFiyat);
+                            SiparisDetay detay = new SiparisDetay(beden, miktar, renk, birimFiyat);
                             detaylar.add(detay);
                         } catch (NumberFormatException ex) {
                             JOptionPane.showMessageDialog(null, "Detay bilgileri geçersiz. Lütfen tekrar deneyin.");

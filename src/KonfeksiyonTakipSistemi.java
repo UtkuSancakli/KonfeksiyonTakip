@@ -23,7 +23,7 @@ public class KonfeksiyonTakipSistemi {
 
     // Ürün yönetimi
     public void urunEkle(long urunKodu, String urunAdi, String kategori, String renk, String beden, double fiyat, int stokMiktari) {
-        Urun urun = new Urun(urunKodu, urunAdi, kategori, renk, beden, fiyat, stokMiktari);
+        Urun urun = new Urun(urunKodu, urunAdi, kategori, fiyat, stokMiktari);
         urunler.put(urunKodu, urun);
         System.out.println("✓ Ürün eklendi: " + urun);
     }
@@ -223,8 +223,6 @@ public class KonfeksiyonTakipSistemi {
                     urun.getUrunKodu(),
                     urun.getUrunAdi(),
                     urun.getKategori(),
-                    urun.getRenk(),
-                    urun.getBeden(),
                     String.format("%.2f TL", urun.getFiyat()),
                     urun.getStokMiktari()
             };

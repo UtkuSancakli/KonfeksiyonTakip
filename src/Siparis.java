@@ -2,11 +2,11 @@ import java.time.LocalDate;
 import java.util.List;
 
 public class Siparis {
-    private int siparisNo;
+    private final int siparisNo;
     private final long urunNo;
     private int toplamAdet;
     private final String musteriAdi;
-    private LocalDate siparisTarihi;
+    private final LocalDate siparisTarihi;
     private LocalDate teslimTarihi;
     private boolean isReady;
     private List<SiparisDetay> detaylar;
@@ -25,8 +25,8 @@ public class Siparis {
         this.notlar = notlar;
     }
 
-    public void urunEkle(String beden, int miktar, double birimFiyat) {
-        detaylar.add(new SiparisDetay(beden, miktar, birimFiyat));
+    public void urunEkle(String beden, int miktar, String renk, double birimFiyat) {
+        detaylar.add(new SiparisDetay(beden, miktar, renk, birimFiyat));
     }
 
     public double getToplamFiyat() {

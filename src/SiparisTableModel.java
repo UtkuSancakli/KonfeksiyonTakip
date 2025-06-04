@@ -90,7 +90,7 @@ class SiparisTableModel extends AbstractTableModel {
             // Detaylar için varsayılan tek detay oluşturuluyor, istenirse özelleştirilebilir
             List<SiparisDetay> detaylar = new ArrayList<>();
             double varsayilanFiyat = 100.0; // gerekirse değiştirilebilir
-            detaylar.add(new SiparisDetay("Standart", toplamAdet, varsayilanFiyat));
+            detaylar.add(new SiparisDetay("Standart", toplamAdet, "renk", varsayilanFiyat));
 
             Siparis siparis = new Siparis(siparisNo, urunNo, musteriAdi, toplamAdet, siparisTarihi, teslimTarihi, detaylar, null);
             siparis.setDurum(durum); // true/false
