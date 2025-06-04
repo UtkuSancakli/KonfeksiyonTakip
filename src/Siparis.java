@@ -1,12 +1,13 @@
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Siparis {
-    private int siparisNo;
+    private final int siparisNo;
     private final long urunNo;
     private int toplamAdet;
     private final String musteriAdi;
-    private LocalDate siparisTarihi;
+    private final LocalDate siparisTarihi;
     private LocalDate teslimTarihi;
     private boolean isReady;
     private List<SiparisDetay> detaylar;
@@ -25,8 +26,8 @@ public class Siparis {
         this.notlar = notlar;
     }
 
-    public void urunEkle(String beden, int miktar, double birimFiyat) {
-        detaylar.add(new SiparisDetay(beden, miktar, birimFiyat));
+    public void urunEkle(String beden, int miktar, String renk, double birimFiyat) {
+        detaylar.add(new SiparisDetay(beden, miktar, renk, birimFiyat));
     }
 
     public double getToplamFiyat() {
@@ -48,6 +49,26 @@ public class Siparis {
     public void setTeslimTarihi(LocalDate teslimTarihi) { this.teslimTarihi = teslimTarihi; }
     public void setDurum(boolean durum) { this.isReady = durum; }
     public void setNotlar(String notlar) { this.notlar = notlar; }
+
+    public Siparis deepCopy() {
+        List<SiparisDetay> detayKopya = new ArrayList<>();
+        for (SiparisDetay d : this.detaylar) {
+            detayKopya.add(d.deepCopy());
+        }
+        Siparis yeni = new Siparis(
+                this.siparisNo,
+                this.urunNo,
+                this.musteriAdi,
+                this.toplamAdet,
+                this.siparisTarihi,
+                this.teslimTarihi,
+                detayKopya,
+                this.notlar // varsayılan olarak immutable ya da kopyalanabilir
+        );
+        yeni.setDurum(this.isReady);
+        return yeni;
+    }
+
 
     @Override
     public String toString() {

@@ -9,7 +9,7 @@ import java.util.ArrayList;
 
 // GUI için gerekli Table Model sınıfları
 class UrunTableModel extends AbstractTableModel {
-    private final String[] columnNames = {"Ürün Kodu", "Ürün Adı", "Kategori", "Renk", "Beden", "Fiyat", "Stok"};
+    private final String[] columnNames = {"Ürün Kodu", "Ürün Adı", "Kategori", "Fiyat", "Stok"};
     private List<Urun> urunler;
 
     public UrunTableModel(List<Urun> urunler) {
@@ -32,10 +32,8 @@ class UrunTableModel extends AbstractTableModel {
             case 0: return urun.getUrunKodu();
             case 1: return urun.getUrunAdi();
             case 2: return urun.getKategori();
-            case 3: return urun.getRenk();
-            case 4: return urun.getBeden();
-            case 5: return String.format("%.2f TL", urun.getFiyat());
-            case 6: return urun.getStokMiktari();
+            case 3: return String.format("%.2f TL", urun.getFiyat());
+            case 4: return urun.getStokMiktari();
             default: return null;
         }
     }
@@ -64,10 +62,8 @@ class UrunTableModel extends AbstractTableModel {
                     Integer.parseInt(row[0].toString()),    // Ürün Kodu
                     row[1].toString(),                      // Ürün Adı
                     row[2].toString(),                      // Kategori
-                    row[3].toString(),                      // Renk
-                    row[4].toString(),                      // Beden
-                    Double.parseDouble(row[5].toString().replace(" TL", "").replace(",", ".")),  // Fiyat
-                    Integer.parseInt(row[6].toString())     // Stok
+                    Double.parseDouble(row[3].toString().replace(" TL", "").replace(",", ".")),  // Fiyat
+                    Integer.parseInt(row[4].toString())     // Stok
             );
             urunler.add(yeniUrun);
             fireTableRowsInserted(urunler.size() - 1, urunler.size() - 1);

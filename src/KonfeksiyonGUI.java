@@ -1,14 +1,10 @@
 import javax.swing.*;
-import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 public class KonfeksiyonGUI extends JFrame {
     private KonfeksiyonTakipSistemi sistem;
@@ -20,6 +16,11 @@ public class KonfeksiyonGUI extends JFrame {
     private JTable musteriTable;
     SiparisTableModel siparisTableModel;
     private JTable siparisTable;
+    SiparisDetayTableModel detayTableModel;
+    private JTable detayTable;
+    SiparisTableModel filtreliTableModel;
+    JTable filtreliTable;
+
 
     static JTextArea logArea;
 
@@ -119,7 +120,7 @@ public class KonfeksiyonGUI extends JFrame {
         urunTable.getTableHeader().setReorderingAllowed(false);
 
         // Stok sütunu için özel renderer (düşük stok kırmızı)
-        urunTable.getColumnModel().getColumn(6).setCellRenderer(new DefaultTableCellRenderer() {
+        urunTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
@@ -184,34 +185,67 @@ public class KonfeksiyonGUI extends JFrame {
     }
 
     private JPanel createSiparisPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
+        JPanel anaPanel = new JPanel(new BorderLayout());
 
-        // Buton paneli
+        // === Üst: Buton Paneli ===
         JPanel buttonPanel = new JPanel(new FlowLayout());
+
         JButton ekleBtn = new JButton("➕ Sipariş Ekle");
-        JButton yenileBtn = new JButton("↻ Yenile");
-
         buttonPanel.add(ekleBtn);
+
+        JButton yenileBtn = new JButton("↻ Yenile");
         buttonPanel.add(yenileBtn);
-        panel.add(buttonPanel, BorderLayout.NORTH);
 
-        // Sipariş tablosu
+        JButton aramaBtn = new JButton("\uD83D\uDD0D Arama"); // Unicode sabiti düzgün gösterim
+        buttonPanel.add(aramaBtn);
+
+        anaPanel.add(buttonPanel, BorderLayout.NORTH);
+
+        // === Orta: JSplitPane ile 2 tablo ===
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        splitPane.setResizeWeight(0.5);
+
+        // --- Üst: Sipariş Tablosu ---
         List<Siparis> siparisler = new ArrayList<>(sistem.siparisler.values());
-        siparisTableModel = new SiparisTableModel(siparisler);
-        siparisTable = new JTable(siparisTableModel);
-        siparisTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        siparisTable.getTableHeader().setReorderingAllowed(false);
+        siparisTableModel = new SiparisTableModel(siparisler); // Orijinal model bellekte tutulur
 
-        JScrollPane scrollPane = new JScrollPane(siparisTable);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        List<Siparis> deepCopiedList = siparisler.stream()
+                .map(Siparis::deepCopy)
+                .collect(Collectors.toList());
+        filtreliTableModel = new SiparisTableModel(deepCopiedList); // Başlangıçta tüm siparişler
 
-        // Sipariş ekle butonu
-        ekleBtn.addActionListener(e -> siparisEkleDialog());
+        filtreliTable = new JTable(filtreliTableModel);
+        filtreliTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        JScrollPane siparisScroll = new JScrollPane(filtreliTable);
+        siparisScroll.setBorder(BorderFactory.createTitledBorder("Siparişler"));
 
-        // Yenile butonu
-        yenileBtn.addActionListener(e -> siparisTablosunuYenile());
+        // --- Alt: Sipariş Detay Tablosu ---
+        detayTableModel = new SiparisDetayTableModel(new ArrayList<>());
+        detayTable = new JTable(detayTableModel);
+        JScrollPane detayScroll = new JScrollPane(detayTable);
+        detayScroll.setBorder(BorderFactory.createTitledBorder("Sipariş Detayları"));
 
-        return panel;
+        // === Satır seçimi ===
+        filtreliTable.getSelectionModel().addListSelectionListener(e -> {
+            int selectedRow = filtreliTable.getSelectedRow();
+            if (selectedRow >= 0) {
+                Siparis secili = filtreliTableModel.getSiparisAt(selectedRow);
+                if (secili != null) {
+                    detayTableModel.setDetaylar(secili.getDetaylar());
+                }
+            }
+        });
+
+        splitPane.setTopComponent(siparisScroll);
+        splitPane.setBottomComponent(detayScroll);
+        anaPanel.add(splitPane, BorderLayout.CENTER);
+
+        // === Buton aksiyonları ===
+        ekleBtn.addActionListener(event -> siparisEkleDialog());
+        yenileBtn.addActionListener(event -> siparisTablosunuYenile());
+        aramaBtn.addActionListener(event -> siparisFiltreleDialog());
+
+        return anaPanel;
     }
 
 
@@ -417,8 +451,8 @@ public class KonfeksiyonGUI extends JFrame {
         sistem.urunEkle(230274704, "Denim Ceket", "Ceket", "Mavi", "L", 750.0, 15);
 
         // Örnek siparişler
-        SiparisDetay detay1 = new SiparisDetay("M", 10, 69.99);
-        SiparisDetay detay2 = new SiparisDetay("XS", 10, 59.99);
+        SiparisDetay detay1 = new SiparisDetay("M", 10, "Mavi", 69.99);
+        SiparisDetay detay2 = new SiparisDetay("XS", 10, "Siyah",59.99);
 
         List<SiparisDetay> detaylar = new ArrayList<SiparisDetay>();
         detaylar.add(detay1);
@@ -434,6 +468,9 @@ public class KonfeksiyonGUI extends JFrame {
 
 
         urunTablosunuYenile();
+        siparisTablosunuYenile();
+        musteriTablosunuYenile();
+
         logEkle("🏭 Sistem başlatıldı - Örnek veriler yüklendi");
     }
 
@@ -493,7 +530,7 @@ public class KonfeksiyonGUI extends JFrame {
         JTextField telefonField = new JTextField(15);
         JTextField adresField = new JTextField(15);
 
-        JPanel panel = new JPanel(new GridLayout(3, 2));
+        JPanel panel = new JPanel(new GridLayout(5, 2));
         panel.add(new JLabel("Ad:"));
         panel.add(adField);
         panel.add(new JLabel("Soyad:"));
@@ -625,32 +662,37 @@ public class KonfeksiyonGUI extends JFrame {
                     JTextField bedenField = new JTextField(5);
                     JTextField miktarField = new JTextField(5);
                     JTextField fiyatField = new JTextField(5);
+                    JTextField renkField = new JTextField(5);
 
                     JPanel detayPanel = new JPanel(new GridLayout(0, 2));
                     detayPanel.add(new JLabel("Beden:"));
                     detayPanel.add(bedenField);
                     detayPanel.add(new JLabel("Miktar:"));
                     detayPanel.add(miktarField);
+                    detayPanel.add(new JLabel("Renk:"));
+                    detayPanel.add(renkField);
                     detayPanel.add(new JLabel("Birim Fiyat:"));
                     detayPanel.add(fiyatField);
+
 
                     Object[] options = {"Devam", "Bitir"};
                     int detayResult = JOptionPane.showOptionDialog(null, detayPanel, "Sipariş Detay Ekle",
                             JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                             null, options, options[0]);
 
-                    if (detayResult == 0) { // Devam
-                        try {
-                            String beden = bedenField.getText().trim();
-                            int miktar = Integer.parseInt(miktarField.getText().trim());
-                            double birimFiyat = Double.parseDouble(fiyatField.getText().trim());
+                    try {
+                        String beden = bedenField.getText().trim();
+                        int miktar = Integer.parseInt(miktarField.getText().trim());
+                        double birimFiyat = Double.parseDouble(fiyatField.getText().trim());
+                        String renk = renkField.getText().trim();
 
-                            SiparisDetay detay = new SiparisDetay(beden, miktar, birimFiyat);
-                            detaylar.add(detay);
-                        } catch (NumberFormatException ex) {
-                            JOptionPane.showMessageDialog(null, "Detay bilgileri geçersiz. Lütfen tekrar deneyin.");
-                        }
-                    } else {
+                        SiparisDetay detay = new SiparisDetay(beden, miktar, renk, birimFiyat);
+                        detaylar.add(detay);
+                    }
+                    catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(null, "Detay bilgileri geçersiz. Lütfen tekrar deneyin.");
+                    }
+                    if (detayResult != 0) { // Devam
                         devam = false;
                     }
                 }
@@ -675,15 +717,101 @@ public class KonfeksiyonGUI extends JFrame {
             }
         }
     }
-
     private void siparisTablosunuYenile() {
-        siparisTableModel.setSiparisler(new ArrayList<>(sistem.siparisler.values()));
-        siparisTableModel.fireTableDataChanged();
+        List<Siparis> yeniListe = new ArrayList<>(sistem.siparisler.values());
+        siparisTableModel.updateData(yeniListe);
+
+        List<Siparis> kopyaListe = yeniListe.stream()
+                .map(Siparis::deepCopy)
+                .collect(Collectors.toList());
+        filtreliTableModel.updateData(kopyaListe);
     }
 
+    private void siparisFiltreleDialog() {
+        // Filtreleme alanları
+        JTextField siparisNoField = new JTextField(10);
+        JTextField musteriAdField = new JTextField(10);
+        JTextField urunNoField = new JTextField(10);
+        JTextField durumField = new JTextField(5);
+        JTextField toplamAdetField = new JTextField(10);
+        JTextField siparisTarihiField = new JTextField(10);
+        JTextField teslimTarihiField = new JTextField(10);
 
+        // Panel oluştur
+        JPanel panel = new JPanel(new GridLayout(7, 2));
+        panel.add(new JLabel("Sipariş No:"));
+        panel.add(siparisNoField);
+        panel.add(new JLabel("Müşteri Adı:"));
+        panel.add(musteriAdField);
+        panel.add(new JLabel("Ürün No:"));
+        panel.add(urunNoField);
+        panel.add(new JLabel("Durum (true/false):"));
+        panel.add(durumField);
+        panel.add(new JLabel("Toplam Adet:"));
+        panel.add(toplamAdetField);
+        panel.add(new JLabel("Sipariş Tarihi (YYYY-MM-DD):"));
+        panel.add(siparisTarihiField);
+        panel.add(new JLabel("Teslim Tarihi (YYYY-MM-DD):"));
+        panel.add(teslimTarihiField);
 
+        // Dialog göster
+        int result = JOptionPane.showConfirmDialog(null, panel, "Filtreleme Kriterleri",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
 
+        // OK'e basıldıysa filtrele
+        if (result == JOptionPane.OK_OPTION) {
+            String siparisNo = siparisNoField.getText().trim();
+            String musteriAd = musteriAdField.getText().trim();
+            String urunNo = urunNoField.getText().trim();
+            String durum = durumField.getText().trim();
+            String toplamAdet = toplamAdetField.getText().trim();
+            String siparisTarihi = siparisTarihiField.getText().trim();
+            String teslimTarihi = teslimTarihiField.getText().trim();
+
+            // Asıl filtreleme metodu çağrılır
+            filtreUygula(siparisNo, musteriAd, urunNo, durum, toplamAdet, siparisTarihi, teslimTarihi);
+        }
+    }
+    private void filtreUygula(String siparisNoText, String musteriAd, String urunNoText, String durumText, String toplamAdetText, String siparisTarihiText, String teslimTarihiText) {
+
+        List<Siparis> filtrelenmisListe = siparisTableModel.getSiparisler().stream()
+                .map(Siparis::deepCopy)
+                .collect(Collectors.toList());
+
+        try {
+            if (!siparisNoText.isBlank()) {
+                int siparisNo = Integer.parseInt(siparisNoText);
+                filtrelenmisListe.removeIf(s -> s.getSiparisNo() != siparisNo);
+            }
+            if (!musteriAd.isBlank()) {
+                filtrelenmisListe.removeIf(s -> !s.getMusteriAdi().toLowerCase().contains(musteriAd.toLowerCase()));
+            }
+            if (!urunNoText.isBlank()) {
+                long urunNo = Long.parseLong(urunNoText);
+                filtrelenmisListe.removeIf(s -> s.getUrunNo() != urunNo);
+            }
+            if (!durumText.isBlank()) {
+                boolean durum = Boolean.parseBoolean(durumText);
+                filtrelenmisListe.removeIf(s -> s.getDurum() != durum);
+            }
+            if (!toplamAdetText.isBlank()) {
+                int toplamAdet = Integer.parseInt(toplamAdetText);
+                filtrelenmisListe.removeIf(s -> s.getToplamAdet() != toplamAdet);
+            }
+            if (!siparisTarihiText.isBlank()) {
+                LocalDate tarih = LocalDate.parse(siparisTarihiText);
+                filtrelenmisListe.removeIf(s -> !s.getSiparisTarihi().equals(tarih));
+            }
+            if (!teslimTarihiText.isBlank()) {
+                LocalDate tarih = LocalDate.parse(teslimTarihiText);
+                filtrelenmisListe.removeIf(s -> !s.getTeslimTarihi().equals(tarih));
+            }
+
+            filtreliTableModel.updateData(filtrelenmisListe);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Filtreleme sırasında hata: " + e.getMessage());
+        }
+    }
 
 
 

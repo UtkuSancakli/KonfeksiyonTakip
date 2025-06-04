@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 class SiparisTableModel extends AbstractTableModel {
-    private final String[] columnNames = {"siparisNo", "musteriAdi", "urunNo", "Kapalı mı?", "toplamAdet", "toplamFiyat", "siparisTarihi", "teslimTarihi"};
+    private final String[] columnNames = {"siparisNo", "musteriAdi", "urunNo", "Kapalı mı?", "toplamAdet", "toplamFiyat", "siparisTarihi", "teslimTarihi", "not"};
     private List<Siparis> siparisler;
 
     public SiparisTableModel(List<Siparis> siparisler) {
@@ -48,6 +48,7 @@ class SiparisTableModel extends AbstractTableModel {
             case 5 -> siparis.getToplamFiyat();
             case 6 -> siparis.getSiparisTarihi();
             case 7 -> siparis.getTeslimTarihi();
+            case 8 -> siparis.getNotlar();
             default -> null;
         };
     }
@@ -90,7 +91,7 @@ class SiparisTableModel extends AbstractTableModel {
             // Detaylar için varsayılan tek detay oluşturuluyor, istenirse özelleştirilebilir
             List<SiparisDetay> detaylar = new ArrayList<>();
             double varsayilanFiyat = 100.0; // gerekirse değiştirilebilir
-            detaylar.add(new SiparisDetay("Standart", toplamAdet, varsayilanFiyat));
+            detaylar.add(new SiparisDetay("Standart", toplamAdet, "renk", varsayilanFiyat));
 
             Siparis siparis = new Siparis(siparisNo, urunNo, musteriAdi, toplamAdet, siparisTarihi, teslimTarihi, detaylar, null);
             siparis.setDurum(durum); // true/false
@@ -105,5 +106,9 @@ class SiparisTableModel extends AbstractTableModel {
 
     public void setSiparisler(ArrayList<Siparis> siparisler) {
         this.siparisler = siparisler;
+    }
+
+    public List<Siparis> getSiparisler() {
+        return siparisler;
     }
 }
