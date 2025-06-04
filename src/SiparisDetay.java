@@ -14,6 +14,8 @@ public class SiparisDetay {
         this.siparisDurumu = SiparisDurumu.YENI;
     }
 
+
+
     public int getMiktar() { return miktar; }
     public double getBirimFiyat() { return birimFiyat; }
     public double getAraToplamFiyat() { return miktar * birimFiyat; }
@@ -32,5 +34,21 @@ public class SiparisDetay {
 
     public SiparisDetay deepCopy() {
         return new SiparisDetay(this.beden, this.miktar, this.renk, this.birimFiyat);
+    }
+
+    public void setBeden(String beden) {
+        this.beden = beden;
+    }
+    public void setMiktar(int miktar) {
+        this.miktar = miktar;
+    }
+    public void setRenk(String renk) {
+        this.renk = renk;
+    }
+    public void setBirimFiyat(double birimFiyat) {
+        this.birimFiyat = birimFiyat;
+    }
+    public void setSiparisDurumu(SiparisDurumu siparisDurumu) {
+        this.siparisDurumu = SiparisDurumu.YENI;
     }
 }

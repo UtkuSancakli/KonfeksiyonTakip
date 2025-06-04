@@ -3,11 +3,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Siparis {
-    private final int siparisNo;
-    private final long urunNo;
+    private int siparisNo;
+    private long urunNo;
     private int toplamAdet;
-    private final String musteriAdi;
-    private final LocalDate siparisTarihi;
+    private String musteriAdi;
+    private LocalDate siparisTarihi;
     private LocalDate teslimTarihi;
     private boolean isReady;
     private List<SiparisDetay> detaylar;
@@ -30,9 +30,7 @@ public class Siparis {
         detaylar.add(new SiparisDetay(beden, miktar, renk, birimFiyat));
     }
 
-    public double getToplamFiyat() {
-        return detaylar.stream().mapToDouble(SiparisDetay::getAraToplamFiyat).sum();
-    }
+
     // Getter metodları
     public int getSiparisNo() { return siparisNo; }
     public long getUrunNo() {
@@ -45,10 +43,37 @@ public class Siparis {
     public int getToplamAdet() { return toplamAdet; }
     public List<SiparisDetay> getDetaylar() { return detaylar; }
     public String getNotlar() { return notlar; }
+    public double getToplamFiyat() {
+        return detaylar.stream().mapToDouble(SiparisDetay::getAraToplamFiyat).sum();
+    }
 
     public void setTeslimTarihi(LocalDate teslimTarihi) { this.teslimTarihi = teslimTarihi; }
     public void setDurum(boolean durum) { this.isReady = durum; }
     public void setNotlar(String notlar) { this.notlar = notlar; }
+    public void setSiparisNo(int siparisNo) {
+        this.siparisNo = siparisNo;
+    }
+    public void setUrunNo(long urunNo) {
+        this.urunNo = urunNo;
+    }
+    public void setMusteriAdi(String musteriAdi) {
+        this.musteriAdi = musteriAdi;
+    }
+    public void setSiparisTarihi(LocalDate siparisTarihi) {
+        this.siparisTarihi = siparisTarihi;
+    }
+    public void setDetaylar(List<SiparisDetay> detaylar) {
+        this.detaylar = detaylar;
+    }
+    public void setNotlar() {
+        this.notlar = notlar;
+    }
+    public void setToplamAdet(int toplamAdet) {
+        this.toplamAdet = toplamAdet;
+    }
+    public void setDurum(String durum) {
+        this.isReady = durum.equals("Hazır") || durum.equals("hazır");
+    }
 
     public Siparis deepCopy() {
         List<SiparisDetay> detayKopya = new ArrayList<>();
@@ -87,4 +112,6 @@ public class Siparis {
         }
         return sb.toString();
     }
+
+
 }

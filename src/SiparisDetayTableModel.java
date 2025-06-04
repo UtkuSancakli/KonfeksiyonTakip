@@ -10,6 +10,14 @@ public class SiparisDetayTableModel extends AbstractTableModel {
         this.detaylar = detaylar;
     }
 
+    public void updateDetay(int rowIndex, SiparisDetay yeniDetay) {
+        if (rowIndex >= 0 && rowIndex < detaylar.size()) {
+            detaylar.set(rowIndex, yeniDetay);
+            fireTableRowsUpdated(rowIndex, rowIndex);
+        }
+    }
+
+
     @Override
     public int getRowCount() {
         return detaylar != null ? detaylar.size() : 0;
@@ -42,5 +50,9 @@ public class SiparisDetayTableModel extends AbstractTableModel {
     public void setDetaylar(List<SiparisDetay> yeniDetaylar) {
         this.detaylar = yeniDetaylar;
         fireTableDataChanged();
+    }
+
+    public SiparisDetay getRowAt(int selectedRow) {
+        return detaylar.get(selectedRow);
     }
 }

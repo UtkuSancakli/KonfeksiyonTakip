@@ -1,6 +1,8 @@
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.ArrayList;
@@ -207,12 +209,9 @@ public class KonfeksiyonGUI extends JFrame {
 
         // --- Üst: Sipariş Tablosu ---
         List<Siparis> siparisler = new ArrayList<>(sistem.siparisler.values());
-        siparisTableModel = new SiparisTableModel(siparisler); // Orijinal model bellekte tutulur
+        siparisTableModel = new SiparisTableModel(siparisler);
 
-        List<Siparis> deepCopiedList = siparisler.stream()
-                .map(Siparis::deepCopy)
-                .collect(Collectors.toList());
-        filtreliTableModel = new SiparisTableModel(deepCopiedList); // Başlangıçta tüm siparişler
+        filtreliTableModel = new SiparisTableModel(siparisler); // shallow copy
 
         filtreliTable = new JTable(filtreliTableModel);
         filtreliTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -235,6 +234,81 @@ public class KonfeksiyonGUI extends JFrame {
                 }
             }
         });
+
+        //Düzenleme için Satır Seçimi
+        filtreliTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && filtreliTable.getSelectedRow() != -1) {
+                    int selectedRow = filtreliTable.getSelectedRow();
+                    Siparis secili = filtreliTableModel.getSiparisAt(selectedRow);
+                    siparisDuzenlePopup(secili, selectedRow);
+                }
+            }
+        });
+
+
+        // === Detay Tablodan Satır Seçimi (Çift Tıklama ile Düzenleme) ===
+        detayTable.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && detayTable.getSelectedRow() >= 0) {
+                    int selectedRow = detayTable.getSelectedRow();
+                    SiparisDetay detay = detayTableModel.getRowAt(selectedRow);
+                    if (detay == null) return;
+
+                    // === Form bileşenleri ===
+                    JTextField bedenField = new JTextField(detay.getBeden());
+                    JTextField miktarField = new JTextField(String.valueOf(detay.getMiktar()));
+                    JTextField renkField = new JTextField(detay.getRenk());
+                    JTextField birimFiyatField = new JTextField(String.valueOf(detay.getBirimFiyat()));
+                    JTextField siparisDurumuField = new JTextField(String.valueOf(detay.getSiparisDurumu()));
+
+                    JPanel panel = new JPanel(new GridLayout(5, 2));
+                    panel.add(new JLabel("Beden:"));
+                    panel.add(bedenField);
+                    panel.add(new JLabel("Miktar:"));
+                    panel.add(miktarField);
+                    panel.add(new JLabel("Renk:"));
+                    panel.add(renkField);
+                    panel.add(new JLabel("Birim Fiyatı:"));
+                    panel.add(birimFiyatField);
+                    panel.add(new JLabel("Sipariş Durumu:"));
+                    panel.add(siparisDurumuField);
+
+                    int result = JOptionPane.showConfirmDialog(null, panel, "Detayı Düzenle",
+                            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+                    if (result == JOptionPane.OK_OPTION) {
+                        try {
+                            // Kullanıcıdan gelen verilerle güncelle
+                            String beden = bedenField.getText().trim();
+                            int miktar = Integer.parseInt(miktarField.getText().trim());
+                            String renk = renkField.getText().trim();
+                            double birimFiyat = Double.parseDouble(birimFiyatField.getText().trim());
+                            SiparisDurumu siparisDurumu = SiparisDurumu.valueOf(siparisDurumuField.getText().trim());
+
+                            // Yeni nesne yaratmak yerine mevcut detay'ı güncelle
+                            detay.setBeden(beden);
+                            detay.setMiktar(miktar);
+                            detay.setRenk(renk);
+                            detay.setBirimFiyat(birimFiyat);
+                            detay.setSiparisDurumu(siparisDurumu);
+
+                            // Görünümü yenile
+                            detayTableModel.fireTableRowsUpdated(selectedRow, selectedRow);
+
+                        }
+                        catch (Exception ex) {
+                            JOptionPane.showMessageDialog(null, "Hata: " + ex.getMessage(), "Giriş Hatası", JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+
+                }
+            }
+        });
+
 
         splitPane.setTopComponent(siparisScroll);
         splitPane.setBottomComponent(detayScroll);
@@ -720,11 +794,59 @@ public class KonfeksiyonGUI extends JFrame {
     private void siparisTablosunuYenile() {
         List<Siparis> yeniListe = new ArrayList<>(sistem.siparisler.values());
         siparisTableModel.updateData(yeniListe);
+        filtreliTableModel.updateData(new ArrayList<>(yeniListe));
+    }
 
-        List<Siparis> kopyaListe = yeniListe.stream()
-                .map(Siparis::deepCopy)
-                .collect(Collectors.toList());
-        filtreliTableModel.updateData(kopyaListe);
+
+    private void siparisDuzenlePopup(Siparis siparis, int rowIndex) {
+        JTextField siparisNoField = new JTextField(String.valueOf(siparis.getSiparisNo()));
+        JTextField musteriAdField = new JTextField(siparis.getMusteriAdi());
+        JTextField urunNoField = new JTextField(String.valueOf(siparis.getUrunNo()));
+        JTextField durumField = new JTextField(String.valueOf(siparis.getDurum()));
+        JTextField toplamAdetField = new JTextField(String.valueOf(siparis.getToplamAdet()));
+        JTextField siparisTarihiField = new JTextField(siparis.getSiparisTarihi().toString());
+        JTextField teslimTarihiField = new JTextField(siparis.getTeslimTarihi().toString());
+
+        JPanel panel = new JPanel(new GridLayout(7, 2));
+        panel.add(new JLabel("Sipariş No:")); panel.add(siparisNoField);
+        panel.add(new JLabel("Müşteri Adı:")); panel.add(musteriAdField);
+        panel.add(new JLabel("Ürün No:")); panel.add(urunNoField);
+        panel.add(new JLabel("Durum (true/false):")); panel.add(durumField);
+        panel.add(new JLabel("Toplam Adet:")); panel.add(toplamAdetField);
+        panel.add(new JLabel("Sipariş Tarihi (YYYY-MM-DD):")); panel.add(siparisTarihiField);
+        panel.add(new JLabel("Teslim Tarihi (YYYY-MM-DD):")); panel.add(teslimTarihiField);
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "Siparişi Düzenle",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            try {
+                // Yeni değerlerle Siparis nesnesini güncelle
+                int siparisNo = Integer.parseInt(siparisNoField.getText().trim());
+                String musteriAdi = musteriAdField.getText().trim();
+                long urunNo = Long.parseLong(urunNoField.getText().trim());
+                boolean durum = Boolean.parseBoolean(durumField.getText().trim());
+                int toplamAdet = Integer.parseInt(toplamAdetField.getText().trim());
+                LocalDate siparisTarihi = LocalDate.parse(siparisTarihiField.getText().trim());
+                LocalDate teslimTarihi = LocalDate.parse(teslimTarihiField.getText().trim());
+
+                // Güncelle
+                siparis.setSiparisNo(siparisNo);
+                siparis.setMusteriAdi(musteriAdi);
+                siparis.setUrunNo(urunNo);
+                siparis.setDurum(durum);
+                siparis.setToplamAdet(toplamAdet);
+                siparis.setSiparisTarihi(siparisTarihi);
+                siparis.setTeslimTarihi(teslimTarihi);
+
+                // Modele bildir
+                filtreliTableModel.fireTableRowsUpdated(rowIndex, rowIndex);
+                siparisTableModel.fireTableRowsInserted(rowIndex, rowIndex);
+
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Hata: " + e.getMessage(), "Giriş Hatası", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     private void siparisFiltreleDialog() {
