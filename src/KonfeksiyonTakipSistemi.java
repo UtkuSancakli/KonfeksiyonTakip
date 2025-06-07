@@ -1,5 +1,7 @@
 import javax.swing.*;
+import java.sql.*;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,131 +10,307 @@ import java.util.stream.Collectors;
 public class KonfeksiyonTakipSistemi {
 
     private KonfeksiyonGUI myGui;
-    Map<Long, Urun> urunler;
-    protected Map<Integer, Musteri> musteriler;
-    protected Map<Integer, Siparis> siparisler;
-
     private int siparisCounter = 1;
     private int musteriCounter = 1;
 
     public KonfeksiyonTakipSistemi() {
-        this.urunler = new HashMap<>();
-        this.musteriler = new HashMap<>();
-        this.siparisler = new HashMap<>();
+        // Map'ler artık gerekli değil, database kullanacağız
     }
 
     // Ürün yönetimi
     public void urunEkle(long urunKodu, String urunAdi, String kategori, String renk, String beden, double fiyat, int stokMiktari) {
-        Urun urun = new Urun(urunKodu, urunAdi, kategori, fiyat, stokMiktari);
-        urunler.put(urunKodu, urun);
-        System.out.println("✓ Ürün eklendi: " + urun);
+        String sql = "INSERT INTO konfeksiyon.urun (urun_no, urun_adi, fiyat, stok_miktari, kategori) VALUES (?, ?, ?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, urunKodu);
+            pstmt.setString(2, urunAdi);
+            pstmt.setDouble(3, fiyat);
+            pstmt.setInt(4, stokMiktari);
+            pstmt.setString(5, kategori);
+
+            pstmt.executeUpdate();
+            System.out.println("✓ Ürün eklendi: " + urunAdi);
+            refreshUrunlerTable();
+
+        } catch (SQLException e) {
+            System.err.println("Ürün eklenirken hata: " + e.getMessage());
+        }
     }
 
     public void stokGuncelle(long urunKodu, int yeniStok) {
-        Urun urun = urunler.get(urunKodu);
-        if (urun != null) {
-            int eskiStok = urun.getStokMiktari();
-            urun.setStokMiktari(yeniStok);
-            System.out.println("✓ Stok güncellendi: " + urunKodu + " (" + eskiStok + " → " + yeniStok + ")");
-        } else {
-            System.out.println("✗ Ürün bulunamadı: " + urunKodu);
+        String selectSql = "SELECT stok_miktari FROM konfeksiyon.urun WHERE urun_no = ?";
+        String updateSql = "UPDATE konfeksiyon.urun SET stok_miktari = ? WHERE urun_no = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            // Önce eski stok miktarını al
+            int eskiStok = 0;
+            try (PreparedStatement selectStmt = conn.prepareStatement(selectSql)) {
+                selectStmt.setLong(1, urunKodu);
+                ResultSet rs = selectStmt.executeQuery();
+                if (rs.next()) {
+                    eskiStok = rs.getInt("stok_miktari");
+                } else {
+                    System.out.println("✗ Ürün bulunamadı: " + urunKodu);
+                    return;
+                }
+            }
+
+            // Sonra güncelle
+            try (PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
+                updateStmt.setInt(1, yeniStok);
+                updateStmt.setLong(2, urunKodu);
+                updateStmt.executeUpdate();
+                System.out.println("✓ Stok güncellendi: " + urunKodu + " (" + eskiStok + " → " + yeniStok + ")");
+                refreshUrunlerTable();
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Stok güncellenirken hata: " + e.getMessage());
         }
     }
 
     public List<Urun> dusukStokUrunler(int minStok) {
-        return urunler.values().stream()
-                .filter(urun -> urun.getStokMiktari() <= minStok)
-                .collect(Collectors.toList());
+        List<Urun> dusukStoklar = new ArrayList<>();
+        String sql = "SELECT * FROM konfeksiyon.urun WHERE stok_miktari <= ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, minStok);
+            ResultSet rs = pstmt.executeQuery();
+
+            while (rs.next()) {
+                Urun urun = new Urun(
+                        rs.getLong("urun_no"),
+                        rs.getString("urun_adi"),
+                        rs.getString("kategori"),
+                        rs.getDouble("fiyat"),
+                        rs.getInt("stok_miktari")
+                );
+                dusukStoklar.add(urun);
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Düşük stok ürünler getirilirken hata: " + e.getMessage());
+        }
+
+        return dusukStoklar;
     }
 
     // Müşteri yönetimi
     public void musteriEkle(String ad, String soyad, String telefon, String email, String adres) {
-        int musteriId = musteriCounter++;
-        Musteri musteri = new Musteri(musteriId, ad, soyad, telefon, email, adres);
-        musteriler.put(musteriId, musteri);
-        System.out.println("✓ Müşteri eklendi: " + musteri);
+        String sql = "INSERT INTO konfeksiyon.musteri (ad, soyad, telefon, email, adres) VALUES (?, ?, ?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+            pstmt.setString(1, ad);
+            pstmt.setString(2, soyad);
+            pstmt.setString(3, telefon);
+            pstmt.setString(4, email);
+            pstmt.setString(5, adres);
+
+            pstmt.executeUpdate();
+
+            ResultSet generatedKeys = pstmt.getGeneratedKeys();
+            if (generatedKeys.next()) {
+                int musteriId = generatedKeys.getInt(1);
+                System.out.println("✓ Müşteri eklendi - ID: " + musteriId + ", Ad: " + ad + " " + soyad);
+            }
+
+            refreshMusterilerTable();
+
+        } catch (SQLException e) {
+            System.err.println("Müşteri eklenirken hata: " + e.getMessage());
+        }
     }
 
-    public void musteriSil(int id){
-        musteriler.remove(id);
-        musteriCounter--;
+    public void musteriSil(int id) {
+        String sql = "DELETE FROM konfeksiyon.musteri WHERE musteri_no = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, id);
+            int affected = pstmt.executeUpdate();
+
+            if (affected > 0) {
+                System.out.println("✓ Müşteri silindi - ID: " + id);
+                refreshMusterilerTable();
+            } else {
+                System.out.println("✗ Silinecek müşteri bulunamadı: " + id);
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Müşteri silinirken hata: " + e.getMessage());
+        }
     }
 
-    public void siparisOlustur(int siparisNo, long urunNo, String musteriAdi, int toplamAdet, LocalDate siparisTarihi, LocalDate teslimTarihi,  List<SiparisDetay> detaylar, String notlar) {
+    public void siparisOlustur(int siparisNo, long urunNo, String musteriAdi, int toplamAdet, LocalDate siparisTarihi, LocalDate teslimTarihi, List<SiparisDetay> detaylar, String notlar) {
+        // Önce müşteri ID'sini bul
+        int musteriNo = getMusteriIdByName(musteriAdi);
+        if (musteriNo == -1) {
+            System.out.println("✗ Müşteri bulunamadı: " + musteriAdi);
+            return;
+        }
 
-        //checkStock(urunNo, toplamAdet);
+        //??????????
+        String siparisSQL = "INSERT INTO konfeksiyon.siparisler (siparis_no, MusteriNo, urunNo, toplam_adet, siparis_tarihi, teslim_tarihi, musteri_adi, not) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String detaySQL = "INSERT INTO konfeksiyon.siparis_detay (siparis_no, Beden, Miktar, Renk, birim_fiyatı) VALUES (?, ?, ?, ?, ?)";
 
-        Siparis tempSiparis = new Siparis(siparisNo, urunNo, musteriAdi, toplamAdet, siparisTarihi, teslimTarihi, detaylar, notlar);
-        siparisler.put(siparisNo, tempSiparis);
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            conn.setAutoCommit(false); // Transaction başlat
 
+            // Sipariş ekle
+            try (PreparedStatement siparisStmt = conn.prepareStatement(siparisSQL)) {
+                siparisStmt.setInt(1, siparisNo);
+                siparisStmt.setInt(2, musteriNo);
+                siparisStmt.setLong(3, urunNo);
+                siparisStmt.setInt(4, toplamAdet);
+                siparisStmt.setDate(5, Date.valueOf(siparisTarihi));
+                siparisStmt.setDate(6, teslimTarihi != null ? Date.valueOf(teslimTarihi) : null);
+                siparisStmt.setString(7, musteriAdi);
+                siparisStmt.setString(8, notlar);
+                siparisStmt.executeUpdate();
+            }
 
-        logEkle("✓ Yeni sipariş eklendi: " + siparisNo);
+            // Sipariş detayları ekle
+            try (PreparedStatement detayStmt = conn.prepareStatement(detaySQL)) {
+                for (SiparisDetay detay : detaylar) {
+                    detayStmt.setInt(1, siparisNo);
+                    detayStmt.setString(2, detay.getBeden());
+                    detayStmt.setInt(3, detay.getMiktar());
+                    detayStmt.setString(4, detay.getRenk());
+                    detayStmt.setDouble(5, detay.getBirimFiyat());
+                    detayStmt.executeUpdate();
+                }
+            }
+
+            conn.commit(); // Transaction'ı onayla
+            logEkle("✓ Yeni sipariş eklendi: " + siparisNo);
+            refreshSiparislerTable();
+
+        } catch (SQLException e) {
+            System.err.println("Sipariş oluşturulurken hata: " + e.getMessage());
+            try (Connection conn = DatabaseConnection.getConnection()) {
+                conn.rollback(); // Hata durumunda geri al
+            } catch (SQLException rollbackEx) {
+                System.err.println("Rollback hatası: " + rollbackEx.getMessage());
+            }
+        }
     }
 
     public void siparisDurumGuncelle(String siparisNo, boolean yeniDurum) {
-        Siparis siparis = siparisler.get(siparisNo);
-        if (siparis != null) {
-            boolean eskiDurum = siparis.getDurum();
-            siparis.setDurum(yeniDurum);
-            System.out.println("✓ Sipariş durumu güncellendi: " + siparisNo + " (" + eskiDurum + " → " + yeniDurum + ")");
-        } else {
-            System.out.println("✗ Sipariş bulunamadı: " + siparisNo);
+        String sql = "UPDATE konfeksiyon.siparisler SET hazır = ? WHERE siparis_no = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setBoolean(1, yeniDurum);
+            pstmt.setLong(2, Long.parseLong(siparisNo));
+
+            int affected = pstmt.executeUpdate();
+            if (affected > 0) {
+                System.out.println("✓ Sipariş durumu güncellendi: " + siparisNo + " → " + (yeniDurum ? "Hazır" : "Beklemede"));
+                refreshSiparislerTable();
+            } else {
+                System.out.println("✗ Sipariş bulunamadı: " + siparisNo);
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Sipariş durumu güncellenirken hata: " + e.getMessage());
         }
     }
 
     public void siparisNotEkle(String siparisNo, String not) {
-        Siparis siparis = siparisler.get(siparisNo);
-        if (siparis != null) {
-            siparis.setNotlar(not);
-            System.out.println("✓ Sipariş notu eklendi: " + siparisNo);
-        } else {
-            System.out.println("✗ Sipariş bulunamadı: " + siparisNo);
+        String sql = "UPDATE konfeksiyon.siparisler SET 'not' = ? WHERE siparis_no = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, not);
+            pstmt.setLong(2, Long.parseLong(siparisNo));
+
+            int affected = pstmt.executeUpdate();
+            if (affected > 0) {
+                System.out.println("✓ Sipariş notu eklendi: " + siparisNo);
+            } else {
+                System.out.println("✗ Sipariş bulunamadı: " + siparisNo);
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Sipariş notu eklenirken hata: " + e.getMessage());
         }
     }
 
     // Raporlama
     public void siparisDetayGoster(String siparisNo) {
-        Siparis siparis = siparisler.get(siparisNo);
-        if (siparis != null) {
-            System.out.println("\n" + "=".repeat(50));
-            System.out.println("SİPARİŞ DETAYI");
-            System.out.println("=".repeat(50));
-            System.out.println(siparis);
+        String sql = "SELECT s.*, u.urun_adi FROM konfeksiyon.siparisler s JOIN konfeksiyon.urun u ON s.urunNo = u.urun_no WHERE s.siparis_no = ?";
 
-            Musteri musteri = musteriler.get(siparis.getMusteriAdi());
-            if (musteri != null) {
-                System.out.println("Müşteri Bilgileri: " + musteri);
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, Long.parseLong(siparisNo));
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                System.out.println("\n" + "=".repeat(50));
+                System.out.println("SİPARİŞ DETAYI");
+                System.out.println("=".repeat(50));
+                System.out.println("Sipariş No: " + rs.getLong("siparis_no"));
+                System.out.println("Müşteri: " + rs.getString("musteri_adi"));
+                System.out.println("Ürün: " + rs.getString("urun_adi"));
+                System.out.println("Adet: " + rs.getInt("toplam_adet"));
+                System.out.println("Sipariş Tarihi: " + rs.getDate("siparis_tarihi"));
+                System.out.println("Teslim Tarihi: " + rs.getDate("teslim_tarihi"));
+                System.out.println("Durum: " + (rs.getBoolean("hazır") ? "Hazır" : "Beklemede"));
+                System.out.println("Notlar: " + rs.getString("not"));
+                System.out.println("=".repeat(50));
+            } else {
+                System.out.println("✗ Sipariş bulunamadı: " + siparisNo);
             }
-            System.out.println("=".repeat(50));
-        } else {
-            System.out.println("✗ Sipariş bulunamadı: " + siparisNo);
+
+        } catch (SQLException e) {
+            System.err.println("Sipariş detayı getirilirken hata: " + e.getMessage());
         }
     }
 
     public void gunlukSiparisRaporu() {
         LocalDate bugun = LocalDate.now();
-        List<Siparis> gunlukSiparisler = siparisler.values().stream()
-                .filter(s -> s.getSiparisTarihi().equals(bugun))
-                .toList();
+        String sql = "SELECT COUNT(*) as siparis_sayisi, SUM(sd.birim_fiyatı * sd.Miktar) as toplam_ciro " +
+                "FROM konfeksiyon.siparisler s LEFT JOIN konfeksiyon.siparis_detay sd ON s.siparis_no = sd.siparis_no " +
+                "WHERE s.siparis_tarihi = ?";
 
-        System.out.println("\n" + "=".repeat(50));
-        System.out.println("GÜNLÜK SİPARİŞ RAPORU - " + bugun);
-        System.out.println("=".repeat(50));
-        System.out.println("Toplam Sipariş: " + gunlukSiparisler.size());
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-        double toplamCiro = gunlukSiparisler.stream()
-                .mapToDouble(Siparis::getToplamFiyat)
-                .sum();
-        System.out.println("Günlük Ciro: " + String.format("%.2f TL", toplamCiro));
+            pstmt.setDate(1, Date.valueOf(bugun));
+            ResultSet rs = pstmt.executeQuery();
 
-        Map<Boolean, Long> durumSayilari = gunlukSiparisler.stream()
-                .collect(Collectors.groupingBy(Siparis::getDurum, Collectors.counting()));
+            System.out.println("\n" + "=".repeat(50));
+            System.out.println("GÜNLÜK SİPARİŞ RAPORU - " + bugun);
+            System.out.println("=".repeat(50));
 
-        System.out.println("\nDurum Dağılımı:");
-        for (Map.Entry<Boolean, Long> entry : durumSayilari.entrySet()) {
-            System.out.println("  " + entry.getKey() + ": " + entry.getValue());
+            if (rs.next()) {
+                System.out.println("Toplam Sipariş: " + rs.getInt("siparis_sayisi"));
+                System.out.println("Günlük Ciro: " + String.format("%.2f TL", rs.getDouble("toplam_ciro")));
+            }
+
+            // Durum dağılımı
+            String durumSQL = "SELECT hazır, COUNT(*) as sayi FROM konfeksiyon.siparisler WHERE siparis_tarihi = ? GROUP BY hazır";
+            try (PreparedStatement durumStmt = conn.prepareStatement(durumSQL)) {
+                durumStmt.setDate(1, Date.valueOf(bugun));
+                ResultSet durumRs = durumStmt.executeQuery();
+
+                System.out.println("\nDurum Dağılımı:");
+                while (durumRs.next()) {
+                    String durum = durumRs.getBoolean("hazır") ? "Hazır" : "Beklemede";
+                    System.out.println("  " + durum + ": " + durumRs.getInt("sayi"));
+                }
+            }
+
+            System.out.println("=".repeat(50));
+
+        } catch (SQLException e) {
+            System.err.println("Günlük rapor oluşturulurken hata: " + e.getMessage());
         }
-        System.out.println("=".repeat(50));
     }
 
     public void stokRaporu() {
@@ -144,22 +322,27 @@ public class KonfeksiyonTakipSistemi {
         if (!dusukStoklar.isEmpty()) {
             System.out.println("⚠️  DÜŞÜK STOK UYARISI (≤10):");
             for (Urun urun : dusukStoklar) {
-                System.out.println("  " + urun);
+                System.out.println("  " + urun.getUrunAdi() + " - Stok: " + urun.getStokMiktari());
             }
         } else {
             System.out.println("✓ Tüm ürünlerde yeterli stok mevcut");
         }
 
-        System.out.println("\nKategori Bazında Stok:");
-        Map<String, Integer> kategoriStok = urunler.values().stream()
-                .collect(Collectors.groupingBy(
-                        Urun::getKategori,
-                        Collectors.summingInt(Urun::getStokMiktari)
-                ));
+        // Kategori bazında stok
+        String sql = "SELECT kategori, SUM(stok_miktari) as toplam_stok FROM konfeksiyon.urun GROUP BY kategori";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
 
-        for (Map.Entry<String, Integer> entry : kategoriStok.entrySet()) {
-            System.out.println("  " + entry.getKey() + ": " + entry.getValue() + " adet");
+            System.out.println("\nKategori Bazında Stok:");
+            while (rs.next()) {
+                System.out.println("  " + rs.getString("kategori") + ": " + rs.getInt("toplam_stok") + " adet");
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Kategori stok raporu oluşturulurken hata: " + e.getMessage());
         }
+
         System.out.println("=".repeat(50));
     }
 
@@ -168,43 +351,106 @@ public class KonfeksiyonTakipSistemi {
         System.out.println("TÜM SİPARİŞLER");
         System.out.println("=".repeat(50));
 
-        if (siparisler.isEmpty()) {
-            System.out.println("Henüz sipariş bulunmuyor.");
-        }
-        else {
-            for (Siparis siparis : siparisler.values()) {
-                System.out.println(String.format("Sipariş: %s | Müşteri: %s | Durum: %s | Tutar: %.2f TL | Tarih: %s",
-                        siparis.getSiparisNo(),
-                        siparis.getMusteriAdi(),
-                        siparis.getDurum(),
-                        siparis.getToplamFiyat(),
-                        siparis.getSiparisTarihi()));
+        String sql = "SELECT s.siparis_no, s.musteri_adi, u.urun_adi, s.toplam_adet, s.siparis_tarihi, s.hazır, " +
+                "SUM(sd.birim_fiyatı * sd.Miktar) as toplam_fiyat " +
+                "FROM konfeksiyon.siparisler s " +
+                "JOIN konfeksiyon.urun u ON s.urunNo = u.urun_no " +
+                "LEFT JOIN konfeksiyon.siparis_detay sd ON s.siparis_no = sd.siparis_no " +
+                "GROUP BY s.siparis_no";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            boolean varMi = false;
+            while (rs.next()) {
+                varMi = true;
+                System.out.printf("Sipariş: %d | Müşteri: %s | Ürün: %s | Durum: %s | Tutar: %.2f TL | Tarih: %s%n",
+                        rs.getLong("siparis_no"),
+                        rs.getString("musteri_adi"),
+                        rs.getString("urun_adi"),
+                        rs.getBoolean("hazır") ? "Hazır" : "Beklemede",
+                        rs.getDouble("toplam_fiyat"),
+                        rs.getDate("siparis_tarihi"));
             }
+
+            if (!varMi) {
+                System.out.println("Henüz sipariş bulunmuyor.");
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Siparişler listelenirken hata: " + e.getMessage());
         }
+
         System.out.println("=".repeat(50));
     }
 
-
     //Helper methods ---------------------------------------------------------------------------
     private double checkPrice(long urunNo, double birimFiyat) {
+        String sql = "SELECT fiyat FROM konfeksiyon.urun WHERE urun_no = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-        double mainBirimFiyat = urunler.get(urunNo).getFiyat();
-        if(mainBirimFiyat != birimFiyat){
-            int answer = JOptionPane.showConfirmDialog(null,
-                    "Ürünün kayıtlı birim fiyatı ile girilen fiyat aynı değil. Yeni fiyat yine de kullanılsın mı? Kayıtlı Birim Fiyatı: " + mainBirimFiyat + "| Girilen: " + birimFiyat,
-                    "Fiyat Uyarısı", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
-            if (answer != JOptionPane.YES_OPTION) {
-                return mainBirimFiyat;
+            pstmt.setLong(1, urunNo);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                double mainBirimFiyat = rs.getDouble("fiyat");
+                if (mainBirimFiyat != birimFiyat) {
+                    int answer = JOptionPane.showConfirmDialog(null,
+                            "Ürünün kayıtlı birim fiyatı ile girilen fiyat aynı değil. Yeni fiyat yine de kullanılsın mı? Kayıtlı Birim Fiyatı: " + mainBirimFiyat + "| Girilen: " + birimFiyat,
+                            "Fiyat Uyarısı", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
+                    if (answer != JOptionPane.YES_OPTION) {
+                        return mainBirimFiyat;
+                    }
+                }
+                return birimFiyat;
             }
+
+        } catch (SQLException e) {
+            System.err.println("Fiyat kontrol edilirken hata: " + e.getMessage());
         }
+
         return birimFiyat;
     }
 
     private void checkStock(long urunNo, int adet) {
-        int stokMiktari = urunler.get(urunNo).getStokMiktari();
-        if(stokMiktari < adet){
-            JOptionPane.showMessageDialog(null, "Stok miktarı sipariş miktarını karşılamıyor. Üretilmesi gerek ürün sayısı: " + (adet-stokMiktari), "Stok Miktarı Uyarısı", JOptionPane.INFORMATION_MESSAGE);
+        String sql = "SELECT stok_miktari FROM konfeksiyon.urun WHERE urun_no = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setLong(1, urunNo);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                int stokMiktari = rs.getInt("stok_miktari");
+                if (stokMiktari < adet) {
+                    JOptionPane.showMessageDialog(null, "Stok miktarı sipariş miktarını karşılamıyor. Üretilmesi gerek ürün sayısı: " + (adet - stokMiktari), "Stok Miktarı Uyarısı", JOptionPane.INFORMATION_MESSAGE);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Stok kontrol edilirken hata: " + e.getMessage());
         }
+    }
+
+    private int getMusteriIdByName(String musteriAdi) {
+        String sql = "SELECT musteri_no FROM konfeksiyon.musteri WHERE CONCAT(ad, ' ', soyad) = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, musteriAdi);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt("musteri_no");
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Müşteri ID bulunurken hata: " + e.getMessage());
+        }
+
+        return -1;
     }
 
     private static void logEkle(String mesaj) {
@@ -214,63 +460,196 @@ public class KonfeksiyonTakipSistemi {
     }
 
     private void refreshUrunlerTable() {
-        // Clear existing data
+        if (myGui == null) return;
+
         myGui.urunTableModel.setRowCount(0);
 
-        // Add all products from the Map
-        for (Urun urun : urunler.values()) {
-            Object[] row = {
-                    urun.getUrunKodu(),
-                    urun.getUrunAdi(),
-                    urun.getKategori(),
-                    String.format("%.2f TL", urun.getFiyat()),
-                    urun.getStokMiktari()
-            };
-            myGui.urunTableModel.addRow(row);
-        }
+        String sql = "SELECT * FROM konfeksiyon.urun";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
 
-        logEkle("📦 Ürün tablosu yenilendi - " + urunler.size() + " ürün");
+            int count = 0;
+            while (rs.next()) {
+                Object[] row = {
+                        rs.getLong("urun_no"),
+                        rs.getString("urun_adi"),
+                        rs.getString("kategori"),
+                        String.format("%.2f TL", rs.getDouble("fiyat")),
+                        rs.getInt("stok_miktari")
+                };
+                myGui.urunTableModel.addRow(row);
+                count++;
+            }
+
+            logEkle("📦 Ürün tablosu yenilendi - " + count + " ürün");
+
+        } catch (SQLException e) {
+            System.err.println("Ürün tablosu yenilenirken hata: " + e.getMessage());
+        }
     }
 
     private void refreshMusterilerTable() {
-        // Assuming you have a musteriTableModel variable for the customer table
-        // Clear existing data
+        if (myGui == null) return;
+
         myGui.musteriTableModel.setRowCount(0);
 
-        // Add all customers from the Map
-        for (Musteri musteri : musteriler.values()) {
-            Object[] row = {
-                    musteri.getId(),
-                    musteri.getAd() + " " + musteri.getSoyad(),
-                    musteri.getTelefon(),
-                    musteri.getEmail()
-            };
-            myGui.musteriTableModel.addRow(row);
-        }
+        String sql = "SELECT * FROM konfeksiyon.musteri";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
 
-        logEkle("👥 Müşteri tablosu yenilendi - " + musteriler.size() + " müşteri");
+            int count = 0;
+            while (rs.next()) {
+                Object[] row = {
+                        rs.getInt("musteri_no"),
+                        rs.getString("ad") + " " + rs.getString("soyad"),
+                        rs.getString("telefon"),
+                        rs.getString("email")
+                };
+                myGui.musteriTableModel.addRow(row);
+                count++;
+            }
+
+            logEkle("👥 Müşteri tablosu yenilendi - " + count + " müşteri");
+
+        } catch (SQLException e) {
+            System.err.println("Müşteri tablosu yenilenirken hata: " + e.getMessage());
+        }
     }
 
     private void refreshSiparislerTable() {
-        // Assuming you have a siparisTableModel variable for the orders table
-        // Clear existing data
+        if (myGui == null) return;
+
         myGui.siparisTableModel.setRowCount(0);
 
-        // Add all orders from the Map
-        for (Siparis siparis : siparisler.values()) {
-            Object[] row = {
-                    siparis.getSiparisNo(),
-                    siparis.getMusteriAdi(),
-                    siparis.getUrunNo(),
-                    siparis.getDurum() ? "Hazır" : "Beklemede",
-                    siparis.getDetaylar().stream().mapToInt(SiparisDetay::getMiktar).sum(), // Total quantity
-                    String.format("%.2f TL", siparis.getToplamFiyat())
-            };
-            myGui.siparisTableModel.addRow(row);
-        }
+        String sql = "SELECT s.siparis_no, s.musteri_adi, s.urunNo, s.hazır, s.toplam_adet, " +
+                "SUM(sd.birim_fiyatı * sd.Miktar) as toplam_fiyat " +
+                "FROM konfeksiyon.siparisler s " +
+                "LEFT JOIN konfeksiyon.siparis_detay sd ON s.siparis_no = sd.siparis_no " +
+                "GROUP BY s.siparis_no";
 
-        logEkle("📋 Sipariş tablosu yenilendi - " + siparisler.size() + " sipariş");
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            int count = 0;
+            while (rs.next()) {
+                Object[] row = {
+                        rs.getLong("siparis_no"),
+                        rs.getString("musteri_adi"),
+                        rs.getLong("urunNo"),
+                        rs.getBoolean("hazır") ? "Hazır" : "Beklemede",
+                        rs.getInt("toplam_adet"),
+                        String.format("%.2f TL", rs.getDouble("toplam_fiyat"))
+                };
+                myGui.siparisTableModel.addRow(row);
+                count++;
+            }
+
+            logEkle("📋 Sipariş tablosu yenilendi - " + count + " sipariş");
+
+        } catch (SQLException e) {
+            System.err.println("Sipariş tablosu yenilenirken hata: " + e.getMessage());
+        }
+    }
+
+    // GUI bağlantısı için setter
+    public void setMyGui(KonfeksiyonGUI gui) {
+        this.myGui = gui;
     }
 
 
+    public List<Urun> getTumUrunler() {
+        List<Urun> urunler = new ArrayList<>();
+        String sql = "SELECT * FROM konfeksiyon.urun";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                urunler.add(new Urun(
+                        rs.getLong("urun_no"),
+                        rs.getString("urun_adi"),
+                        rs.getString("kategori"),
+                        rs.getDouble("fiyat"),
+                        rs.getInt("stok_miktari")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Ürünler alınamadı: " + e.getMessage());
+        }
+        return urunler;
+    }
+
+    public ArrayList<Musteri> getTumMusteriler() {
+        ArrayList<Musteri> musteriler = new ArrayList<>();
+        String sql = "SELECT * FROM konfeksiyon.musteri";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                musteriler.add(new Musteri(
+                        rs.getInt("musteri_no"),
+                        rs.getString("ad"),
+                        rs.getString("soyad"),
+                        rs.getString("telefon"),
+                        rs.getString("email"),
+                        rs.getString("adres")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Müşteriler alınamadı: " + e.getMessage());
+        }
+        return musteriler;
+    }
+
+    public List<Siparis> getTumSiparisler() {
+        List<Siparis> siparisler = new ArrayList<>();
+        String sql = "SELECT * FROM konfeksiyon.siparisler";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                Siparis siparis = new Siparis(
+                        rs.getInt("siparis_no"),
+                        rs.getLong("urunNo"),
+                        rs.getString("musteri_adi"),
+                        rs.getInt("toplam_adet"),
+                        rs.getDate("siparis_tarihi").toLocalDate(),
+                        rs.getDate("teslim_tarihi") != null ? rs.getDate("teslim_tarihi").toLocalDate() : null,
+                        getSiparisDetaylari(rs.getInt("siparis_no")),
+                        rs.getString("not")
+                );
+                siparis.setDurum(rs.getBoolean("hazır"));
+                siparisler.add(siparis);
+            }
+        } catch (SQLException e) {
+            System.err.println("Siparişler alınamadı: " + e.getMessage());
+        }
+        return siparisler;
+    }
+
+    private List<SiparisDetay> getSiparisDetaylari(int siparisNo) {
+        List<SiparisDetay> detaylar = new ArrayList<>();
+        String sql = "SELECT * FROM konfeksiyon.siparis_detay WHERE siparis_no = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, siparisNo);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                detaylar.add(new SiparisDetay(
+                        rs.getString("Beden"),
+                        rs.getInt("Miktar"),
+                        rs.getString("Renk"),
+                        rs.getDouble("birim_fiyatı")
+                ));
+            }
+        } catch (SQLException e) {
+            System.err.println("Sipariş detayları alınamadı: " + e.getMessage());
+        }
+        return detaylar;
+    }
 }

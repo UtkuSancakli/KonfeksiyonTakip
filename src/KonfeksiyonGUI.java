@@ -116,7 +116,7 @@ public class KonfeksiyonGUI extends JFrame {
         panel.add(buttonPanel, BorderLayout.NORTH);
 
         // Ürün tablosu
-        urunTableModel = new UrunTableModel(new ArrayList<>(sistem.urunler.values()));
+        urunTableModel = new UrunTableModel(sistem.getTumUrunler());
         urunTable = new JTable(urunTableModel);
         urunTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         urunTable.getTableHeader().setReorderingAllowed(false);
@@ -162,7 +162,7 @@ public class KonfeksiyonGUI extends JFrame {
         panel.add(buttonPanel, BorderLayout.NORTH);
 
         // Müşteri tablosu
-        List<Musteri> musteriler = new ArrayList<>(sistem.musteriler.values());
+        List<Musteri> musteriler = sistem.getTumMusteriler();
         musteriTableModel = new MusteriTableModel(musteriler);
         musteriTable = new JTable(musteriTableModel);
         musteriTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -208,7 +208,7 @@ public class KonfeksiyonGUI extends JFrame {
         splitPane.setResizeWeight(0.5);
 
         // --- Üst: Sipariş Tablosu ---
-        List<Siparis> siparisler = new ArrayList<>(sistem.siparisler.values());
+        List<Siparis> siparisler = sistem.getTumSiparisler();
         siparisTableModel = new SiparisTableModel(siparisler);
 
         filtreliTableModel = new SiparisTableModel(siparisler); // shallow copy
@@ -459,7 +459,7 @@ public class KonfeksiyonGUI extends JFrame {
     }
 
     private void urunTablosunuYenile() {
-        urunTableModel.updateData(new ArrayList<>(sistem.urunler.values()));
+        urunTableModel = new UrunTableModel(sistem.getTumUrunler());;
     }
 
     private void stokRaporuGoster() {
@@ -683,39 +683,34 @@ public class KonfeksiyonGUI extends JFrame {
         }
     }
     private void musteriTablosunuYenile() {
-        musteriTableModel.setMusteriler(new ArrayList<>(sistem.musteriler.values()));
+        musteriTableModel.setMusteriler(sistem.getTumMusteriler());
         musteriTableModel.fireTableDataChanged();
     }
-
     private void siparisEkleDialog() {
-        if (sistem.musteriler.isEmpty() || sistem.urunler.isEmpty()) {
+        List<Musteri> musteriler = sistem.getTumMusteriler();
+        List<Urun> urunler = sistem.getTumUrunler();
+
+        if (musteriler.isEmpty() || urunler.isEmpty()) {
             JOptionPane.showMessageDialog(null, "Sipariş eklemek için en az 1 müşteri ve 1 ürün olmalıdır.");
             return;
         }
 
         JTextField siparisNoField = new JTextField(5);
-        JComboBox<Musteri> musteriCombo = new JComboBox<>(sistem.musteriler.values().toArray(new Musteri[0]));
-        JComboBox<Urun> urunCombo = new JComboBox<>(sistem.urunler.values().toArray(new Urun[0]));
+        JComboBox<Musteri> musteriCombo = new JComboBox<>(musteriler.toArray(new Musteri[0]));
+        JComboBox<Urun> urunCombo = new JComboBox<>(urunler.toArray(new Urun[0]));
         JTextField adetField = new JTextField("1", 5);
         JTextField notlarField = new JTextField(20);
-        JTextField siparisTarihiField = new JTextField("2025-06-03", 10); // Öntanımlı bugünün tarihi
+        JTextField siparisTarihiField = new JTextField("2025-06-03", 10);
         JTextField teslimTarihiField = new JTextField("2025-06-10", 10);
 
         JPanel panel = new JPanel(new GridLayout(0, 2));
-        panel.add(new JLabel("Sipariş No:"));
-        panel.add(siparisNoField);
-        panel.add(new JLabel("Müşteri:"));
-        panel.add(musteriCombo);
-        panel.add(new JLabel("Ürün:"));
-        panel.add(urunCombo);
-        panel.add(new JLabel("Toplam Adet:"));
-        panel.add(adetField);
-        panel.add(new JLabel("Sipariş Tarihi (YYYY-MM-DD):"));
-        panel.add(siparisTarihiField);
-        panel.add(new JLabel("Teslim Tarihi (YYYY-MM-DD):"));
-        panel.add(teslimTarihiField);
-        panel.add(new JLabel("Notlar:"));
-        panel.add(notlarField);
+        panel.add(new JLabel("Sipariş No:")); panel.add(siparisNoField);
+        panel.add(new JLabel("Müşteri:")); panel.add(musteriCombo);
+        panel.add(new JLabel("Ürün:")); panel.add(urunCombo);
+        panel.add(new JLabel("Toplam Adet:")); panel.add(adetField);
+        panel.add(new JLabel("Sipariş Tarihi (YYYY-MM-DD):")); panel.add(siparisTarihiField);
+        panel.add(new JLabel("Teslim Tarihi (YYYY-MM-DD):")); panel.add(teslimTarihiField);
+        panel.add(new JLabel("Notlar:")); panel.add(notlarField);
 
         int result = JOptionPane.showConfirmDialog(null, panel, "Sipariş Ekle", JOptionPane.OK_CANCEL_OPTION);
 
@@ -730,7 +725,6 @@ public class KonfeksiyonGUI extends JFrame {
                 String notlar = notlarField.getText().trim();
 
                 List<SiparisDetay> detaylar = new ArrayList<>();
-
                 boolean devam = true;
                 while (devam) {
                     JTextField bedenField = new JTextField(5);
@@ -739,64 +733,40 @@ public class KonfeksiyonGUI extends JFrame {
                     JTextField renkField = new JTextField(5);
 
                     JPanel detayPanel = new JPanel(new GridLayout(0, 2));
-                    detayPanel.add(new JLabel("Beden:"));
-                    detayPanel.add(bedenField);
-                    detayPanel.add(new JLabel("Miktar:"));
-                    detayPanel.add(miktarField);
-                    detayPanel.add(new JLabel("Renk:"));
-                    detayPanel.add(renkField);
-                    detayPanel.add(new JLabel("Birim Fiyat:"));
-                    detayPanel.add(fiyatField);
-
+                    detayPanel.add(new JLabel("Beden:")); detayPanel.add(bedenField);
+                    detayPanel.add(new JLabel("Miktar:")); detayPanel.add(miktarField);
+                    detayPanel.add(new JLabel("Renk:")); detayPanel.add(renkField);
+                    detayPanel.add(new JLabel("Birim Fiyat:")); detayPanel.add(fiyatField);
 
                     Object[] options = {"Devam", "Bitir"};
                     int detayResult = JOptionPane.showOptionDialog(null, detayPanel, "Sipariş Detay Ekle",
-                            JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
-                            null, options, options[0]);
+                            JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
 
                     try {
                         String beden = bedenField.getText().trim();
                         int miktar = Integer.parseInt(miktarField.getText().trim());
                         double birimFiyat = Double.parseDouble(fiyatField.getText().trim());
                         String renk = renkField.getText().trim();
-
-                        SiparisDetay detay = new SiparisDetay(beden, miktar, renk, birimFiyat);
-                        detaylar.add(detay);
-                    }
-                    catch (NumberFormatException ex) {
+                        detaylar.add(new SiparisDetay(beden, miktar, renk, birimFiyat));
+                    } catch (NumberFormatException ex) {
                         JOptionPane.showMessageDialog(null, "Detay bilgileri geçersiz. Lütfen tekrar deneyin.");
                     }
-                    if (detayResult != 0) { // Devam
-                        devam = false;
-                    }
+                    if (detayResult != 0) devam = false;
                 }
 
-                // Sipariş oluşturuluyor
-                Siparis yeniSiparis = new Siparis(
-                        siparisNo,
-                        urun.getUrunKodu(),
-                        musteri.getAd(),
-                        toplamAdet,
-                        siparisTarihi,
-                        teslimTarihi,
-                        detaylar,
-                        notlar
-                );
-
-                sistem.siparisler.put(siparisNo, yeniSiparis); // Veya sistem.siparisEkle(yeniSiparis);
+                sistem.siparisOlustur(siparisNo, urun.getUrunKodu(), musteri.getAd() + " " + musteri.getSoyad(),
+                        toplamAdet, siparisTarihi, teslimTarihi, detaylar, notlar);
                 siparisTablosunuYenile();
-
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(null, "Sipariş bilgileri geçersiz. " + ex.getMessage());
             }
         }
     }
     private void siparisTablosunuYenile() {
-        List<Siparis> yeniListe = new ArrayList<>(sistem.siparisler.values());
+        List<Siparis> yeniListe = sistem.getTumSiparisler();
         siparisTableModel.updateData(yeniListe);
         filtreliTableModel.updateData(new ArrayList<>(yeniListe));
     }
-
 
     private void siparisDuzenlePopup(Siparis siparis, int rowIndex) {
         JTextField siparisNoField = new JTextField(String.valueOf(siparis.getSiparisNo()));
